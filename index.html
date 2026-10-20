@@ -16,13 +16,13 @@
   </script>
 
 <link rel="manifest" href="./manifest.json">
-<link rel="icon" type="image/x-icon" href="./icons/favicon.ico">
-<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
-<link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
-<link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png">
-<link rel="apple-touch-icon" sizes="120x120" href="./icons/apple-touch-icon-120.png">
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="./apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="120x120" href="./apple-touch-icon-120.png">
 
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1284,7 +1284,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW falhou:', err));
+      navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('SW falhou:', err));
     });
   }
 </script>

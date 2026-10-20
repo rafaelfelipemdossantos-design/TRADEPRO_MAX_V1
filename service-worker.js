@@ -1,19 +1,22 @@
 /* TradePro Performance — Service Worker
    Guarda o app no aparelho para abrir rápido e funcionar offline.
    Ao publicar uma nova versão, aumente o número em CACHE_VERSION. */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE = `tradepro-${CACHE_VERSION}`;
 
 const SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-192.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon-180.png',
-  './icons/favicon-32.png'
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-192.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon-180.png',
+  './apple-touch-icon-152.png',
+  './apple-touch-icon-120.png',
+  './favicon.ico',
+  './favicon-32.png'
 ];
 
 // Não guardar rastreamento
