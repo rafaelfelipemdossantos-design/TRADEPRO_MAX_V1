@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TradePro Performance — Painel Avançado</title>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-RVXJZ5NP9N"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-RVXJZ5NP9N');
+  </script>
+
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/x-icon" href="./icons/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="120x120" href="./icons/apple-touch-icon-120.png">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TradePro">
+<meta name="application-name" content="TradePro">
+<meta name="theme-color" content="#080b12">
+<meta name="description" content="Painel avançado de cálculo de performance: CKO, SOS, MOP e KBDS.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  :root{
+    --bg:#080b12; --surface:#0f1420; --line:rgba(255,255,255,.08);
+    --cyan:#22d3ee; --amber:#fbbf24; --emerald:#34d399; --rose:#fb7185; --indigo:#8b8cf8;
+  }
+  body{ background:var(--bg); font-family:'Inter',sans-serif; -webkit-tap-highlight-color:transparent; }
+  .font-display{ font-family:'Chakra Petch',sans-serif; }
+  .font-mono{ font-family:'JetBrains Mono',monospace; }
+  select{ -webkit-appearance:none; -moz-appearance:none; appearance:none; }
+  .no-scrollbar::-webkit-scrollbar{ display:none; }
+  .no-scrollbar{ -ms-overflow-style:none; scrollbar-width:none; }
+  .bg-grid{
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size:28px 28px;
+  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
+  .animate-rise{ animation:rise .45s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes popIn{ from{ opacity:0; transform:scale(.94);} to{ opacity:1; transform:scale(1);} }
+  .animate-pop{ animation:popIn .3s cubic-bezier(.16,1,.3,1) both; }
+  @media (prefers-reduced-motion: reduce){
+    .animate-rise, .animate-pop{ animation:none !important; }
+    *{ transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body class="text-slate-100">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ============ DADOS DE DOMÍNIO (mesma base do app original) ============ */
+const GENERAL_BRANDS = [
+  "Always","Tampax", "Pampers", "Downy", "Gillette Masc", "Gillette Fem",
+  "Cabelos", "Desodorantes Masculinos", "Desodorantes Femininos",
+  "Oral-B Escovas", "Oral-B Creme Dental", "Outra Marca"
+];
+
+const CKO_BRANDS = [
+  "Gillette Ap. Mach3", "Gillette Carga Mach3", "Gillette Prestobarba 3",
+  "Gillette Vênus", "Oral-B Escovas", "Ampola ou Óleo Pantene"
+];
+
+const KBDS_TARGETS = [
+  { id:"always_suave", brand:"Always", category:"Versões Suave", target:70, unit:"cm" },
+  { id:"downy_azul", brand:"Downy", category:"Bloco Azul", target:50, unit:"cm" },
+  { id:"downy_colorido", brand:"Downy", category:"Bloco Colorido", target:40, unit:"cm" },
+  { id:"oralb_pastas", brand:"Oral-B", category:"Branqueamento", target:60, unit:"cm" },
+  { id:"pantene_bond", brand:"Pantene", category:"Bond Repair", target:20, unit:"cm" },
+  { id:"gillette_masc", brand:"Gillette Masc", category:"Sistemas", target:35, unit:"ganchos" },
+  { id:"custom", brand:"Outra", category:"Personalizado", target:0, unit:"manual" }
+];
+
+/* ============ FUNÇÕES AUXILIARES (mesma lógica do app original) ============ */
+const getTimestamp = () => {
+  const now = new Date();
+  return `📅 *Data:* ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+};
+const formatSmart = (val, decimals = 1) => {
+  if (!val) return "0";
+  return Number(val.toFixed(decimals)).toString();
+};
+const copyToClipboard = (text, onSuccess) => {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); onSuccess('Copiado com sucesso!'); }
+  catch (err) { console.error(err); }
+  document.body.removeChild(ta);
+};
+const downloadHtmlReport = (data, mainTitle) => {
+  const reports = Array.isArray(data) ? data : [{ title: mainTitle, text: data }];
+  const sectionsHtml = reports.map(r => {
+    const html = r.text
+      .replace(/\*(.*?)\*/g, '<strong style="color:#22d3ee;">$1</strong>')
+      .replace(/_(.*?)_/g, '<em style="color:#94a3b8;">$1</em>')
+      .replace(/\n/g, '<br/>');
+    return `<div class="section">${reports.length > 1 ? `<h2>${r.title}</h2>` : ''}<p>${html}</p></div>`;
+  }).join('<hr/>');
+
+  const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>${mainTitle}</title><style>
+  body{font-family:'Segoe UI',Roboto,Arial,sans-serif;background:#080b12;color:#f1f5f9;margin:0;padding:2rem;display:flex;justify-content:center;}
+  .card{background:#0f1420;border:1px solid #22303f;border-radius:1.25rem;padding:2.5rem;max-width:520px;width:100%;}
+  h1{font-size:1.4rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #22303f;padding-bottom:1rem;margin:0 0 1.5rem;}
+  h2{font-size:1rem;color:#8b8cf8;text-transform:uppercase;margin:1rem 0 .5rem;}
+  hr{border:0;height:1px;background:#22303f;margin:2rem 0;}
+  p{line-height:1.7;font-size:.95rem;color:#cbd5e1;margin:0;}
+  .footer{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid #22303f;font-size:.7rem;color:#64748b;text-align:center;text-transform:uppercase;letter-spacing:.1em;}
+  </style></head><body><div class="card"><h1>📊 ${mainTitle}</h1>${sectionsHtml}
+  <div class="footer">TradePro Performance • ${reports.length} registro(s)</div></div></body></html>`;
+
+  const blob = new Blob([fullHtml], { type:'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Relatorio_${mainTitle.replace(/[^a-zA-Z0-9]/g,'_')}_${Date.now()}.html`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/* ============ ÍCONES ============ */
+const Ic = ({ children, className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+);
+const Ruler = p => <Ic {...p}><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/></Ic>;
+const Gauge = p => <Ic {...p}><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></Ic>;
+const Target = p => <Ic {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></Ic>;
+const ShoppingBag = p => <Ic {...p}><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></Ic>;
+const CreditCard = p => <Ic {...p}><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></Ic>;
+const Share2 = p => <Ic {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></Ic>;
+const Info = p => <Ic {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></Ic>;
+const Check = p => <Ic {...p}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></Ic>;
+const Chevron = p => <Ic {...p}><path d="m6 9 6 6 6-6"/></Ic>;
+const Tag = p => <Ic {...p}><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></Ic>;
+const Alert = p => <Ic {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></Ic>;
+const Store = p => <Ic {...p}><rect width="18" height="12" x="3" y="10" rx="2"/><path d="m2 10 3-7h14l3 7M12 22V10M9 22H5M19 22h-4"/></Ic>;
+const Settings = p => <Ic {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.72l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Ic>;
+const Plus = p => <Ic {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Ic>;
+const Trash = p => <Ic {...p}><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></Ic>;
+const Download = p => <Ic {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></Ic>;
+const ListPlus = p => <Ic {...p}><path d="M11 12H3M16 6H3M16 18H3M18 9v6M21 12h-6"/></Ic>;
+const Clipboard = p => <Ic {...p}><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M12 11h4M12 16h4M8 11h.01M8 16h.01"/></Ic>;
+const Clock = p => <Ic {...p}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></Ic>;
+
+const Upload = p => <Ic {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></Ic>;
+const XIcon = p => <Ic {...p}><path d="M18 6 6 18M6 6l12 12"/></Ic>;
+
+/* ============ LEITURA DO MOP (OCR da tabela "Gôndola") ============ */
+const MOP_ORDER = ['Pampers','Always','Desodorantes Masculinos','Desodorantes Femininos','Cabelos','Oral-B Escovas','Oral-B Creme Dental','Gillette Masc','Gillette Fem','Downy'];
+const MOP_KEYIDX = Object.fromEntries(MOP_ORDER.map((k,i)=>[k,i]));
+const mopNorm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const mopLabelOf = txt => {
+  const t = mopNorm(txt).replace(/[^a-z ]/g,' ');
+  if (/pamper/.test(t)) return 'Pampers';
+  if (/alway|aways|alwa\b/.test(t)) return 'Always';
+  if (/desodor/.test(t)) return /fem/.test(t) ? 'Desodorantes Femininos' : /masc/.test(t) ? 'Desodorantes Masculinos' : 'DESO?';
+  if (/cabelo/.test(t)) return 'Cabelos';
+  if (/oral/.test(t) || /escov|crem/.test(t)) return /crem/.test(t) ? 'Oral-B Creme Dental' : /esco/.test(t) ? 'Oral-B Escovas' : 'ORAL?';
+  if (/gillet/.test(t)) return /fem/.test(t) ? 'Gillette Fem' : /masc/.test(t) ? 'Gillette Masc' : 'GIL?';
+  if (/down/.test(t)) return 'Downy';
+  return null;
+};
+const mopFirstPct = txt => {
+  const m = txt.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/); if (!m) return null;
+  const v = parseFloat(m[1].replace(',','.')); return v <= 100 ? v : null;
+};
+const mopParseLines = lines => {
+  const rows = [];
+  for (const ln of lines) {
+    const v = mopFirstPct(ln); if (v == null) continue;
+    let lab = mopLabelOf(ln);
+    if (!lab) {
+      const t = mopNorm(ln);
+      if (/femininos/.test(t) && !/gillet|oral/.test(t)) lab = 'Desodorantes Femininos';
+      else if (/masculinos/.test(t) && !/gillet|oral/.test(t)) lab = 'Desodorantes Masculinos';
+    }
+    rows.push({ lab, v });
+  }
+  const grp = { 'DESO?':['Desodorantes Masculinos','Desodorantes Femininos'], 'ORAL?':['Oral-B Escovas','Oral-B Creme Dental'], 'GIL?':['Gillette Masc','Gillette Fem'] };
+  const used = {};
+  rows.forEach(r => { if (r.lab && !r.lab.endsWith('?')) used[r.lab] = 1; });
+  rows.forEach(r => { if (r.lab && r.lab.endsWith('?')) { const c = grp[r.lab].find(k => !used[k]); if (c) { r.lab = c; used[c] = 1; } else r.lab = null; } });
+  rows.forEach((r, j) => {
+    if (r.lab) return;
+    for (let p = j - 1; p >= 0; p--) {
+      if (rows[p].lab) { const k = MOP_ORDER[MOP_KEYIDX[rows[p].lab] + (j - p)]; if (k && !used[k]) { r.lab = k; used[k] = 1; } break; }
+    }
+  });
+  const out = {};
+  rows.forEach(r => { if (r.lab && out[r.lab] == null) out[r.lab] = r.v; });
+  return out;
+};
+// acha onde está a tabela Gôndola na imagem (OCR esparso) para reler só essa área
+const mopLocateBlock = (words, W, H) => {
+  const found = [];
+  for (const w of words) {
+    const t = mopNorm(w.t).replace(/[^a-z]/g,'');
+    let idx = -1;
+    if (/^pamper/.test(t)) idx = 0; else if (/^alway/.test(t)) idx = 1; else if (/^cabelo/.test(t)) idx = 4; else if (/^down/.test(t)) idx = 9;
+    if (idx < 0) continue;
+    const cy = (w.y0 + w.y1) / 2, h = w.y1 - w.y0;
+    const p = words.find(o => /\d\s*%|^%$/.test(o.t) && Math.abs((o.y0 + o.y1) / 2 - cy) < h * .7 && o.x0 > w.x1);
+    if (p) found.push({ idx, y: cy, x: w.x0, px1: p.x1 });
+  }
+  if (found.length < 2) return null;
+  const n = found.length, sx = found.reduce((s,f)=>s+f.idx,0), sy = found.reduce((s,f)=>s+f.y,0);
+  const sxx = found.reduce((s,f)=>s+f.idx*f.idx,0), sxy = found.reduce((s,f)=>s+f.idx*f.y,0);
+  const den = n * sxx - sx * sx; if (!den) return null;
+  const pitch = (n * sxy - sx * sy) / den, a = (sy - pitch * sx) / n;
+  if (pitch < 5) return null;
+  const x0 = Math.min(...found.map(f => f.x)) - 20;
+  const x1 = Math.min(W, Math.max(...found.map(f => f.px1)) + 30);
+  const top = Math.max(0, a - pitch * .75), bottom = Math.min(H, a + pitch * 9.75);
+  return { left: Math.max(0, Math.round(x0)), top: Math.round(top), width: Math.round(x1 - x0), height: Math.round(bottom - top) };
+};
+const mopStoreName = (words, W) => {
+  const ws = words.filter(w => w.t.trim());
+  for (const a of ws) {
+    if (!/^nome$/i.test(a.t.replace(/[^a-zA-Z]/g,''))) continue;
+    const cy = (a.y0 + a.y1) / 2, h = a.y1 - a.y0;
+    const row = ws.filter(o => o !== a && Math.abs((o.y0 + o.y1) / 2 - cy) < h * .6 && o.x0 > a.x1 - 2 && o.x1 < W * .47).sort((x, y) => x.x0 - y.x0);
+    if (row.length && /^loja/i.test(row[0].t.replace(/[^a-zA-Z]/g,''))) { const name = row.slice(1).map(o => o.t).join(' ').trim(); if (name) return name; }
+  }
+  return null;
+};
+const loadTesseract = () => new Promise((res, rej) => {
+  if (window.Tesseract) return res(window.Tesseract);
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  sc.onload = () => res(window.Tesseract); sc.onerror = () => rej(new Error('Sem internet para carregar o leitor de imagem'));
+  document.head.appendChild(sc);
+});
+const mopFileToCanvas = async file => {
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Imagem inválida')); i.src = url; });
+  const scale = Math.min(8, 2400 / img.naturalWidth);
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+  const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high'; ctx.filter = 'grayscale(1) contrast(1.15)';
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url); return c;
+};
+// lê uma imagem de MOP e devolve { name, targets }
+const readMopImage = async (worker, file) => {
+  const canvas = await mopFileToCanvas(file);
+  await worker.setParameters({ tessedit_pageseg_mode: '11' });
+  const r1 = await worker.recognize(canvas);
+  const words = (r1.data.words || []).map(w => ({ t: w.text, x0: w.bbox.x0, x1: w.bbox.x1, y0: w.bbox.y0, y1: w.bbox.y1 }));
+  const rect = mopLocateBlock(words, canvas.width, canvas.height);
+  await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const r2 = await worker.recognize(canvas, rect ? { rectangle: rect } : {});
+  const targets = mopParseLines(r2.data.text.split('\n'));
+  let cko = null;
+  const crect = mopLocateCheckout(words, canvas.width, canvas.height);
+  if (crect) {
+    const r3 = await worker.recognize(canvas, { rectangle: crect });
+    cko = mopParseCheckout(r3.data.text.split('\n'));
+  }
+  const ocrName = mopStoreName(words, canvas.width);
+  return { name: ocrName || file.name.replace(/\.[^.]+$/, ''), fromOcr: !!ocrName, targets, cko };
+};
+
+
+/* ---- Checkout HB (itens + maior % de penetração) ---- */
+const mopLocateCheckout = (words, W, H) => {
+  const ws = words.filter(w => w.t.trim());
+  let hdr = null;
+  for (const a of ws) {
+    if (!/^checkout/.test(mopNorm(a.t).replace(/[^a-z]/g,''))) continue;
+    const cy = (a.y0 + a.y1) / 2, h = a.y1 - a.y0;
+    const hb = ws.find(o => o !== a && Math.abs((o.y0 + o.y1) / 2 - cy) < h * .6 && o.x0 >= a.x1 - 2 && o.x0 - a.x1 < h * 2 && /^h[b8]$/i.test(o.t.replace(/[^a-zA-Z0-9]/g,'')));
+    if (hb) { hdr = { x0: a.x0, x1: hb.x1, y0: Math.min(a.y0, hb.y0), y1: Math.max(a.y1, hb.y1) }; break; }
+  }
+  if (!hdr) return null;
+  const cx = (hdr.x0 + hdr.x1) / 2;
+  const ilha = ws.filter(o => /^ilha/.test(mopNorm(o.t).replace(/[^a-z]/g,'')) && o.y0 > hdr.y1 + (hdr.y1 - hdr.y0) * 3).sort((a, b) => a.y0 - b.y0)[0];
+  const top = hdr.y1 + 2;
+  const bottom = ilha ? ilha.y0 - 3 : Math.min(H, top + H * .25);
+  const left = Math.max(0, Math.round(cx - W * .118)), right = Math.min(W, Math.round(cx + W * .118));
+  return { left, top: Math.round(top), width: right - left, height: Math.max(20, Math.round(bottom - top)) };
+};
+const mopParseCheckout = lines => {
+  const ls = lines.map(l => l.trim()).filter(Boolean);
+  const pi = ls.findIndex(l => /penetra|obj|%/.test(mopNorm(l)));
+  const itemLines = pi < 0 ? ls : ls.slice(0, pi);
+  const penText = pi < 0 ? '' : ls.slice(pi).join(' ');
+  const found = [];
+  const add = b => { if (!found.includes(b)) found.push(b); };
+  for (const l of itemLines) {
+    const t = mopNorm(l).replace(/[^a-z0-9 ]/g, ' ');
+    if (/mach|aparelho|carga/.test(t)) {
+      const ap = /aparelho/.test(t), ca = /carga/.test(t);
+      if (ap || !ca) add(CKO_BRANDS[0]);
+      if (ca || !ap) add(CKO_BRANDS[1]);
+    }
+    if (/venus/.test(t)) add(CKO_BRANDS[3]);
+    if (/presto/.test(t)) add(CKO_BRANDS[2]);
+    if (/escov/.test(t)) add(CKO_BRANDS[4]);
+    if (/ampola|oleo|pantene/.test(t)) add(CKO_BRANDS[5]);
+  }
+  // quando há mais de uma porcentagem (faixas), vale a MAIOR
+  const vals = []; const re = /(\d{1,3}(?:[.,]\d+)?)(?:\s*[-–]\s*(\d{1,3}(?:[.,]\d+)?))?\s*%/g; let m;
+  while ((m = re.exec(penText))) [m[1], m[2]].forEach(x => { if (x) { const v = parseFloat(x.replace(',', '.')); if (v <= 100) vals.push(v); } });
+  return { brands: CKO_BRANDS.filter(b => found.includes(b)), target: vals.length ? Math.max(...vals) : null };
+};
+
+/* ============ RELATÓRIO ÚNICO ============ */
+const REPORT_SECTIONS = [
+  { key: 'cko', label: 'CKO · Penetração', color: '#fb7185' },
+  { key: 'sos', label: 'SOS · Participação', color: '#22d3ee' },
+  { key: 'mop', label: 'MOP · Planejamento', color: '#8b8cf8' },
+  { key: 'kbds', label: 'KBDS', color: '#34d399' },
+];
+const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const reportEntries = rep => {
+  const hist = (rep && rep.history ? rep.history : []).map(h => h.text);
+  if (rep && rep.current && !hist.includes(rep.current)) hist.push(rep.current);
+  return hist;
+};
+const parseEntry = text => {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('📅'));
+  let title = ''; const rows = [];
+  lines.forEach((l, i) => {
+    let m;
+    if (i === 0 && (m = l.match(/^\*(.+)\*$/))) { title = m[1]; return; }
+    if ((m = l.match(/^(\S+)\s+\*(.+?):\*\s*(.*)$/))) { rows.push({ t: 'row', label: m[2], value: m[3] }); return; }
+    if ((m = l.match(/^(\S+)\s+\*(.+?)\*$/))) { rows.push({ t: 'badge', value: m[2] }); return; }
+    if ((m = l.match(/^\S+\s+_(.+)_$/))) { rows.push({ t: 'note', value: m[1] }); return; }
+    rows.push({ t: 'note', value: l.replace(/[*_]/g, '') });
+  });
+  return { title, rows };
+};
+const valueTone = v => /^OK$/i.test(v) ? '#34d399' : /ABAIXO/i.test(v) ? '#fb7185' : 'inherit';
+const buildUnifiedHtml = ({ storeName, reports, mop, targets }) => {
+  const now = new Date();
+  const when = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const total = REPORT_SECTIONS.reduce((a, s) => a + reportEntries(reports[s.key]).length, 0);
+  const sections = REPORT_SECTIONS.map(sec => {
+    const entries = reportEntries(reports[sec.key]);
+    if (!entries.length) return '';
+    const cards = entries.map(t => {
+      const e = parseEntry(t);
+      const body = e.rows.map(r => r.t === 'row'
+        ? `<div class="row"><span>${escHtml(r.label)}</span><b style="color:${valueTone(r.value)}">${escHtml(r.value)}</b></div>`
+        : r.t === 'badge' ? `<div class="badge">${escHtml(r.value)}</div>` : `<div class="note">${escHtml(r.value)}</div>`).join('');
+      return `<div class="card" style="--c:${sec.color}"><h3>${escHtml(e.title || sec.label)}</h3>${body}</div>`;
+    }).join('');
+    return `<section><h2><i style="background:${sec.color}"></i>${sec.label} <small>${entries.length}</small></h2><div class="grid">${cards}</div></section>`;
+  }).join('');
+  let mopHtml = '';
+  if (mop) {
+    const g = Object.entries(targets || {}).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `<span class="chip">${escHtml(k)} <b>${escHtml(formatSmart(parseFloat(v) || 0))}%</b></span>`).join('');
+    const c = mop.cko || {};
+    const ck = (c.brands && c.brands.length) ? c.brands.map(b => `<span class="chip">${escHtml(b)}</span>`).join('') : '';
+    mopHtml = `<section><h2><i style="background:#fbbf24"></i>Dados do MOP</h2><div class="grid">` +
+      (ck || c.target != null ? `<div class="card" style="--c:#fb7185"><h3>Checkout HB</h3><div class="chips">${ck || '<span class="note">Sem itens</span>'}</div>${c.target != null ? `<div class="row"><span>Meta de penetração</span><b>${escHtml(formatSmart(c.target))}%</b></div>` : ''}</div>` : '') +
+      (g ? `<div class="card" style="--c:#22d3ee"><h3>Gôndola · metas de SOS</h3><div class="chips">${g}</div></div>` : '') +
+      `</div></section>`;
+  }
+  const title = storeName ? `Relatório Único · ${storeName}` : 'Relatório Único';
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escHtml(title)}</title><style>
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:#080b12;color:#e2e8f0;font-family:'Segoe UI',Roboto,Arial,sans-serif;font-size:clamp(14px,1.5vw + 8px,16px);line-height:1.5;padding:clamp(12px,3vw,32px)}
+.wrap{max-width:1100px;margin:0 auto}
+.hero{background:#0f1420;border:1px solid #22303f;border-radius:16px;padding:clamp(16px,3vw,28px);margin-bottom:clamp(14px,2.5vw,24px)}
+.hero small{color:#22d3ee;text-transform:uppercase;letter-spacing:.14em;font-size:.7em;font-weight:700}
+.hero h1{margin:4px 0 6px;font-size:clamp(1.2rem,4.5vw,2rem);line-height:1.2;word-break:break-word}
+.hero p{margin:0;color:#94a3b8;font-size:.85em}
+section{margin-bottom:clamp(16px,3vw,28px)}
+section h2{display:flex;align-items:center;gap:8px;font-size:clamp(.78rem,2.4vw,.92rem);text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:0 0 10px}
+section h2 i{width:10px;height:10px;border-radius:3px;display:inline-block}
+section h2 small{background:rgba(255,255,255,.08);border-radius:999px;padding:1px 8px;font-size:.85em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:clamp(10px,2vw,16px)}
+.card{background:#0f1420;border:1px solid #22303f;border-top:3px solid var(--c);border-radius:14px;padding:14px 16px;break-inside:avoid;min-width:0}
+.card h3{margin:0 0 8px;font-size:1em;line-height:1.3;word-break:break-word}
+.row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:7px 0;border-top:1px solid rgba(255,255,255,.07)}
+.row span{color:#94a3b8}.row b{margin-left:auto;text-align:right;word-break:break-word}
+.badge{margin-top:8px;display:inline-block;background:rgba(52,211,153,.15);color:#34d399;border-radius:8px;padding:4px 10px;font-weight:600;font-size:.9em}
+.note{color:#94a3b8;font-size:.8em;margin-top:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.chip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:4px 10px;font-size:.85em}
+.chip b{color:#22d3ee}
+.empty{color:#94a3b8;text-align:center;padding:2rem 0}
+footer{text-align:center;color:#64748b;font-size:.7em;text-transform:uppercase;letter-spacing:.12em;margin-top:24px}
+@media print{body{background:#fff;color:#111;padding:0}.hero,.card{background:#fff;border-color:#ccc}.row span,.hero p,.note{color:#555}}
+</style></head><body><div class="wrap">
+<div class="hero"><small>TradePro Performance</small><h1>${storeName ? escHtml(storeName) : 'Relatório Único'}</h1><p>Relatório único · ${when} · ${total} registro(s)</p></div>
+${mopHtml}${sections || '<div class="empty">Nenhum registro adicionado.</div>'}
+<footer>TradePro Performance • Relatório único</footer></div></body></html>`;
+};
+const buildUnifiedText = ({ storeName, reports }) => {
+  const now = new Date();
+  let out = `*Relatório Único${storeName ? ' - ' + storeName : ''}*\n📅 ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  REPORT_SECTIONS.forEach(sec => {
+    const entries = reportEntries(reports[sec.key]);
+    if (!entries.length) return;
+    out += `\n\n━━ ${sec.label.toUpperCase()} ━━\n\n` + entries.map(t => t.split('\n').filter(l => !l.trim().startsWith('📅')).join('\n').trim()).join('\n\n-------------------------\n\n');
+  });
+  return out;
+};
+const downloadUnifiedReport = (html, storeName) => {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Relatorio_${(storeName || 'Unico').replace(/[^a-zA-Z0-9]+/g, '_')}_${Date.now()}.html`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+};
+
+/* ============ COMPONENTE ASSINATURA: RÉGUA DE MEDIÇÃO ============ */
+const MeasureGauge = ({ percentage = 0, target = null, color = '#22d3ee', unit = '%' }) => {
+  const pct = Math.min(Math.max(percentage, 0), 100);
+  const ticks = Array.from({ length: 50 });
+  return (
+    <div className="w-full select-none">
+      <div className="relative h-11 rounded-lg overflow-hidden border border-white/10 bg-black/40">
+        <div className="absolute inset-0 flex">
+          {ticks.map((_, i) => (
+            <div key={i} className={`flex-1 border-r ${ (i+1) % 5 === 0 ? 'border-white/15' : 'border-white/[.04]'}`} />
+          ))}
+        </div>
+        <div
+          className="absolute top-0 left-0 h-full transition-all duration-700 ease-out"
+          style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}33, ${color}cc)` }}
+        />
+        <div className="absolute top-0 left-0 h-full transition-all duration-700 ease-out border-r-2" style={{ width:`${pct}%`, borderColor: color }} />
+        {target != null && target > 0 && (
+          <div className="absolute top-0 h-full w-[2px] bg-amber-400/90 z-10" style={{ left: `${Math.min(target, 100)}%` }}>
+            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] font-mono font-bold text-amber-400 whitespace-nowrap">{formatSmart(target)}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-end pr-3">
+          <span className="font-mono text-sm font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,.8)] tabular-nums">{formatSmart(percentage)}{unit}</span>
+        </div>
+      </div>
+      <div className="flex justify-between mt-1 px-0.5 font-mono text-[8px] text-slate-600">
+        <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+      </div>
+    </div>
+  );
+};
+
+const MopImportBar = ({ mops, activeMop, importing, onFiles, onSelect, onRemove }) => {
+  const fileRef = useRef(null);
+  return (
+    <div className="mb-4">
+      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
+      <button onClick={() => fileRef.current && fileRef.current.click()} disabled={!!importing}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-cyan-500/40 bg-cyan-500/5 hover:bg-cyan-500/10 text-cyan-300 text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-60">
+        <Upload className="w-4 h-4" />
+        {importing ? importing.msg : 'Importar MOP (print da planilha)'}
+      </button>
+      {mops.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {mops.map(m => (
+            <div key={m.id} className={`flex items-center rounded-lg border text-[10px] font-semibold max-w-full ${activeMop === m.id ? 'bg-cyan-500/20 border-cyan-500/50 text-white' : 'bg-black/30 border-white/10 text-slate-400'}`}>
+              <button onClick={() => onSelect(m)} className="pl-2.5 pr-1.5 py-1.5 truncate max-w-[220px]" title={m.name}>{m.name}</button>
+              <button onClick={() => onRemove(m.id)} className="px-1.5 py-1.5 text-slate-500 hover:text-rose-400" title="Remover MOP"><XIcon className="w-3 h-3" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-[10px] text-slate-500 leading-snug">Um único print do MOP preenche as metas de Gôndola (SOS) e o Checkout HB (CKO). Confira os valores — a leitura da imagem pode errar algum número.</p>
+    </div>
+  );
+};
+
+const ReportModal = ({ open, onClose, storeName, setStoreName, reports, mop, targets, onNotify }) => {
+  if (!open) return null;
+  const counts = REPORT_SECTIONS.map(s => ({ ...s, n: reportEntries(reports[s.key]).length }));
+  const total = counts.reduce((a, c) => a + c.n, 0);
+  const build = () => buildUnifiedHtml({ storeName, reports, mop, targets });
+  const canBuild = total > 0 || !!mop;
+  const doDownload = () => { downloadUnifiedReport(build(), storeName); onNotify('Relatório único baixado!'); };
+  const doPreview = () => { const url = URL.createObjectURL(new Blob([build()], { type: 'text/html;charset=utf-8' })); window.open(url, '_blank'); };
+  const doCopy = () => copyToClipboard(buildUnifiedText({ storeName, reports }), onNotify);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onClose}>
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0f1420] border border-white/10 rounded-2xl p-5 animate-pop" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-base font-semibold">Relatório único</h3>
+          <button onClick={onClose} className="p-1.5 text-slate-500 hover:text-white"><XIcon className="w-4 h-4" /></button>
+        </div>
+        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Nome da loja</label>
+        <input value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="Ex.: Atacadão Ferraz de Vasconcelos"
+          className="w-full mt-1 mb-4 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-cyan-500/50" />
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {counts.map(c => (
+            <div key={c.key} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[.03] px-3 py-2 text-xs">
+              <span className="flex items-center gap-2 text-slate-300"><i className="w-2 h-2 rounded-sm" style={{ background: c.color }} />{c.label.split(' ')[0]}</span>
+              <span className="font-mono font-bold">{c.n}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500 mb-4 leading-snug">Inclui os registros da lista de cada aba e a leitura atual preenchida{mop ? ', além dos dados do MOP importado' : ''}. O layout do arquivo se ajusta ao tamanho da tela (celular, tablet, computador e impressão).</p>
+        {canBuild ? (
+          <div className="flex flex-col gap-2">
+            <button onClick={doDownload} className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm bg-indigo-500 hover:bg-indigo-600 transition-all"><Download className="w-4 h-4" /> Baixar relatório (HTML)</button>
+            <div className="flex gap-2">
+              <button onClick={doPreview} className="flex-1 py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 border border-white/10">Visualizar</button>
+              <button onClick={doCopy} className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30"><Share2 className="w-3.5 h-3.5" /> Copiar texto</button>
+            </div>
+          </div>
+        ) : (
+          <button disabled className="w-full py-3 rounded-xl font-semibold text-sm bg-white/5 text-slate-600 cursor-not-allowed">Preencha ou adicione algum registro</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============ COMPONENTES DE UI ============ */
+const Panel = ({ children, accent = 'var(--cyan)' }) => (
+  <div className="relative bg-white/[.03] border border-white/10 rounded-2xl p-5 mb-5 backdrop-blur-xl overflow-hidden">
+    <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+    {children}
+  </div>
+);
+
+const NavButton = ({ id, active, onClick, label, icon: Icon }) => (
+  <button onClick={() => onClick(id)} className={`relative flex-1 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl text-[11px] font-semibold uppercase tracking-wide transition-all duration-300 ${active === id ? 'text-white bg-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[.04]'}`}>
+    <Icon className="w-4 h-4" />
+    <span>{label}</span>
+    {active === id && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-[2px] rounded-full bg-cyan-400" />}
+  </button>
+);
+
+const BrandSelect = ({ selected, onChange, options = GENERAL_BRANDS }) => (
+  <div className="relative mb-4">
+    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400"><Tag className="w-4 h-4" /></div>
+    <select value={selected} onChange={(e) => onChange(e.target.value)} className="w-full bg-black/30 border border-cyan-500/25 rounded-xl pl-10 pr-9 py-3 text-sm font-medium outline-none focus:border-cyan-500 transition-all cursor-pointer">
+      <option value="" disabled>Selecione a marca...</option>
+      {options.map(b => <option key={b} value={b} className="bg-[#0f1420]">{b}</option>)}
+    </select>
+    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"><Chevron className="w-4 h-4" /></div>
+  </div>
+);
+
+const SmartInput = ({ label, value, onChange, unit }) => (
+  <div className="relative">
+    <input type="number" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder=" "
+      className="peer w-full bg-black/25 border border-white/10 rounded-xl px-4 pt-6 pb-2 font-mono text-lg outline-none focus:border-cyan-500/60 transition-all placeholder-transparent" />
+    <label className="absolute left-4 top-4 text-slate-500 text-[11px] font-medium uppercase tracking-wide transition-all duration-200 peer-placeholder-shown:text-sm peer-placeholder-shown:top-3.5 peer-placeholder-shown:capitalize peer-placeholder-shown:tracking-normal peer-focus:top-1.5 peer-focus:text-[10px] peer-focus:text-cyan-400 peer-focus:uppercase">{label}</label>
+    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 text-xs font-mono">{unit}</span>
+  </div>
+);
+
+const StatusPill = ({ status }) => status ? (
+  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${status === 'OK' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'}`}>{status}</span>
+) : null;
+
+const ResultPanel = ({ gaugeValue, gaugeTarget, gaugeColor, gaugeUnit, title, status, description, reportTitle, getReportText, canCopy, onNotify, onSaveToList }) => {
+  const handleCopy = () => { const t = getReportText(); if (t) copyToClipboard(t, onNotify); };
+  const handleDownload = () => { const t = getReportText(); if (t) { downloadHtmlReport(t, reportTitle || title); onNotify("Arquivo HTML baixado!"); } };
+  return (
+    <Panel accent={gaugeColor}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-display text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</span>
+        <StatusPill status={status} />
+      </div>
+      <MeasureGauge percentage={gaugeValue} target={gaugeTarget} color={gaugeColor} unit={gaugeUnit} />
+      <p className="text-slate-500 text-xs leading-relaxed mt-3 mb-4">{description}</p>
+      {canCopy ? (
+        <div className="flex flex-col gap-2 animate-pop">
+          <button onClick={onSaveToList} className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm bg-indigo-500 hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20">
+            <ListPlus className="w-4 h-4" /> Adicionar à lista
+          </button>
+          <div className="flex gap-2">
+            <button onClick={handleCopy} className="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 font-semibold text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+              <Share2 className="w-3.5 h-3.5" /> Copiar
+            </button>
+            <button onClick={handleDownload} className="flex-1 py-2 rounded-xl flex items-center justify-center gap-2 font-semibold text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 transition-all">
+              <Download className="w-3.5 h-3.5" /> Baixar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button disabled className="w-full py-3 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-white/5 text-slate-600 cursor-not-allowed">
+          <Info className="w-4 h-4" /> Preencha os dados
+        </button>
+      )}
+    </Panel>
+  );
+};
+
+const SavedList = ({ reports, moduleName, onRemove, onClear, onCopyAll, onDownloadAll }) => {
+  if (!reports || reports.length === 0) return null;
+  return (
+    <Panel accent="var(--indigo)">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-sm font-bold flex items-center gap-2"><Clipboard className="w-4 h-4 text-indigo-400" /> Lista {moduleName} <span className="font-mono text-slate-500">({reports.length})</span></h3>
+        <button onClick={onClear} className="text-[11px] text-slate-500 hover:text-rose-400 underline decoration-slate-700">Limpar</button>
+      </div>
+      <div className="space-y-1.5 mb-4 max-h-44 overflow-y-auto no-scrollbar">
+        {reports.map((r, i) => (
+          <div key={r.id} className="flex justify-between items-center bg-black/25 px-3 py-2.5 rounded-lg border border-white/5">
+            <span className="text-xs text-slate-300 truncate pr-2">{r.title}</span>
+            <button onClick={() => onRemove(i)} className="text-slate-500 hover:text-rose-400 p-1 shrink-0"><Trash className="w-3.5 h-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onCopyAll} className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+          <Share2 className="w-3.5 h-3.5" /> Copiar todos
+        </button>
+        <button onClick={onDownloadAll} className="flex-1 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold text-xs bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-400 border border-indigo-500/30 transition-all">
+          <Download className="w-3.5 h-3.5" /> Baixar tudo
+        </button>
+      </div>
+    </Panel>
+  );
+};
+
+/* ============ MÓDULO: CKO ============ */
+function CkoModule({ onNotify, onStat, ckoSetup, importBar, onReport }) {
+  const [inputs, setInputs] = useState({ presenca: '', total: '' });
+  const [target, setTarget] = useState('');
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [showBrands, setShowBrands] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  const result = useMemo(() => {
+    const p = parseFloat(inputs.presenca) || 0, t = parseFloat(inputs.total) || 0;
+    return t > 0 ? (p / t) * 100 : 0;
+  }, [inputs]);
+
+  useEffect(() => { onStat(inputs.presenca && inputs.total ? result : null); }, [result, inputs]);
+
+  // preenche Checkout HB (itens + maior %) quando um MOP é importado/selecionado
+  useEffect(() => {
+    if (!ckoSetup || !ckoSetup.stamp) return;
+    setSelectedBrands(ckoSetup.brands || []);
+    setTarget(ckoSetup.target == null ? '' : String(ckoSetup.target));
+  }, [ckoSetup && ckoSetup.stamp]);
+
+  const targetPct = useMemo(() => { const v = parseFloat(target); return isNaN(v) || v <= 0 ? null : v; }, [target]);
+  const status = (targetPct == null || !inputs.presenca || !inputs.total) ? null : (result >= targetPct ? 'OK' : 'ABAIXO');
+  const missing = useMemo(() => {
+    if (targetPct == null) return 0;
+    const t = parseFloat(inputs.total) || 0, p = parseFloat(inputs.presenca) || 0;
+    return Math.max(0, Math.ceil(t * (targetPct / 100) - p));
+  }, [targetPct, inputs]);
+
+  const getReportText = () => {
+    if (!inputs.presenca || !inputs.total) return null;
+    const brandsText = selectedBrands.length ? selectedBrands.join(', ') : "Geral";
+    return `*Relatório CKO*\n\n🛍 *Marcas:* ${brandsText}\n💳 *CKO com Presença:* ${inputs.presenca} un\n🏪 *Total CKO Loja:* ${inputs.total} un\n📊 *Penetração:* ${formatSmart(result)}%${targetPct != null ? `\n🎯 *Objetivo:* ${formatSmart(targetPct)}%\n🚨 *Status:* ${status}${status === 'OK' ? '\n✅ *Meta Batida!*' : `\n🛠️ *Faltam:* ${missing} CKO com presença`}` : ''}\n\n${getTimestamp()}\n\n⚠ _CKO CNPJ não incluso no cálculo_`;
+  };
+  const handleSaveToList = () => {
+    const text = getReportText(); if (!text) return;
+    const brandsText = selectedBrands.length ? selectedBrands.join(', ') : "Geral";
+    setHistory([...history, { id: Date.now(), title: `CKO - ${brandsText} (${formatSmart(result)}%)`, text }]);
+    onNotify("Adicionado à lista de relatórios!");
+    setInputs({ presenca: '', total: '' });
+  };
+  const handleCopyAll = () => copyToClipboard(history.map(h => h.text).join('\n\n-------------------------\n\n'), onNotify);
+  const handleDownloadAll = () => { downloadHtmlReport(history, 'Relatório Completo CKO'); onNotify("HTML consolidado baixado!"); };
+  useEffect(() => { onReport && onReport(history, getReportText()); });
+
+  return (
+    <div>
+      <Panel accent="var(--rose,#fb7185)">
+        <div className="mb-4">
+          <h2 className="font-display text-base font-semibold">Penetração CKO</h2>
+          <p className="text-slate-500 text-xs">Presença da marca nos checkouts da loja</p>
+        </div>
+        {importBar}
+        <div className="mb-4 border border-white/10 rounded-xl overflow-hidden bg-black/20">
+          <button onClick={() => setShowBrands(!showBrands)} className="w-full flex items-center justify-between p-3.5 bg-white/5 hover:bg-white/10 transition-colors">
+            <span className="flex items-center gap-2 text-sm font-semibold"><Tag className="w-4 h-4 text-cyan-400" /> Marcas presentes {selectedBrands.length > 0 && <span className="bg-rose-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-mono">{selectedBrands.length}</span>}</span>
+            <Chevron className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${showBrands ? 'rotate-180' : ''}`} />
+          </button>
+          {showBrands && (
+            <div className="p-3.5 border-t border-white/10 max-h-[220px] overflow-y-auto no-scrollbar">
+              {CKO_BRANDS.map(brand => (
+                <button key={brand} onClick={() => setSelectedBrands(s => s.includes(brand) ? s.filter(b => b !== brand) : [...s, brand])}
+                  className={`w-full flex items-center justify-between p-2.5 mb-1.5 rounded-lg border text-xs transition-all ${selectedBrands.includes(brand) ? 'bg-cyan-500/15 border-cyan-500/40' : 'bg-black/20 border-white/5 text-slate-400'}`}>
+                  {brand} {selectedBrands.includes(brand) ? <Check className="w-4 h-4 text-cyan-400" /> : <div className="w-4 h-4 border border-white/10 rounded" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="space-y-3">
+          <SmartInput label="CKO com presença" value={inputs.presenca} onChange={v => setInputs({ ...inputs, presenca: v })} unit="un" />
+          <SmartInput label="Total de CKO na loja" value={inputs.total} onChange={v => setInputs({ ...inputs, total: v })} unit="un" />
+          <SmartInput label="Meta de penetração (Checkout HB)" value={target} onChange={setTarget} unit="%" />
+        </div>
+      </Panel>
+
+      <ResultPanel
+        gaugeValue={result} gaugeTarget={targetPct} status={status} gaugeColor="#fb7185" gaugeUnit="%" title="Execução CKO"
+        reportTitle="Relatório de Penetração CKO"
+        description={targetPct != null ? (status === 'ABAIXO' ? `Abaixo da meta de ${formatSmart(targetPct)}%. Faltam ${missing} CKO com presença.` : status === 'OK' ? `Meta de ${formatSmart(targetPct)}% atingida ou superada.` : `Meta de penetração: ${formatSmart(targetPct)}%.`) : "Percentual de checkouts da loja com presença dos itens analisados."}
+        getReportText={getReportText} canCopy={inputs.presenca && inputs.total}
+        onNotify={onNotify} onSaveToList={handleSaveToList}
+      />
+
+      <SavedList reports={history} moduleName="CKO" onRemove={i => setHistory(history.filter((_, idx) => idx !== i))} onClear={() => setHistory([])} onCopyAll={handleCopyAll} onDownloadAll={handleDownloadAll} />
+    </div>
+  );
+}
+
+/* ============ MÓDULO: SOS ============ */
+function SosModule({ unitMode, onNotify, onStat, targets, setTargets, importBar, onReport }) {
+  const [inputs, setInputs] = useState({ marca: '', total: '' });
+  const [brand, setBrand] = useState(GENERAL_BRANDS[0]);
+  const [history, setHistory] = useState([]);
+  const [showTargets, setShowTargets] = useState(false);
+  const unitLabel = unitMode === 'cm' ? 'cm' : 'ganchos';
+
+  const result = useMemo(() => {
+    const m = parseFloat(inputs.marca) || 0, t = parseFloat(inputs.total) || 0;
+    return t > 0 ? (m / t) * 100 : 0;
+  }, [inputs]);
+
+  const targetShare = useMemo(() => {
+    const v = targets[brand];
+    return (v !== undefined && v !== '' && v !== null) ? parseFloat(v) || 0 : null;
+  }, [brand, targets]);
+
+  const gapVal = useMemo(() => {
+    if (targetShare == null) return 0;
+    const t = parseFloat(inputs.total) || 0, m = parseFloat(inputs.marca) || 0;
+    return Math.max(0, (t * (targetShare / 100)) - m);
+  }, [targetShare, inputs]);
+
+  const status = useMemo(() => {
+    if (targetShare == null || !inputs.marca || !inputs.total) return null;
+    return result >= targetShare ? 'OK' : 'ABAIXO';
+  }, [result, targetShare, inputs]);
+
+  useEffect(() => { onStat(inputs.marca && inputs.total ? result : null); }, [result, inputs]);
+
+  const handleTargetChange = (b, val) => setTargets({ ...targets, [b]: val });
+  const clearTargets = () => { setTargets({}); onNotify("Metas removidas!"); };
+  const definedTargets = Object.entries(targets).filter(([, v]) => v !== '' && v !== undefined && v !== null);
+
+  const getReportText = () => {
+    if (!inputs.marca || !inputs.total) return null;
+    let report = `*Relatório SOS - ${brand}*\n\n📏 *Modo:* ${unitMode.toUpperCase()}\n📍 *Espaço ${brand}:* ${inputs.marca} ${unitLabel}\n🌍 *Total Categoria:* ${inputs.total} ${unitLabel}\n📊 *Share Atual:* ${formatSmart(result)}%`;
+    if (targetShare != null) {
+      report += `\n🎯 *Objetivo:* ${formatSmart(targetShare)}%\n🚨 *Status:* ${status}`;
+      report += status === 'OK' ? `\n✅ *Meta Batida!*` : `\n🛠️ *Faltam:* ${formatSmart(gapVal)} ${unitLabel}`;
+    }
+    report += `\n\n${getTimestamp()}`;
+    return report;
+  };
+  const handleSaveToList = () => {
+    const text = getReportText(); if (!text) return;
+    setHistory([...history, { id: Date.now(), title: `SOS - ${brand} (${formatSmart(result)}%)`, text }]);
+    onNotify("Adicionado à lista de relatórios!");
+    setInputs({ marca: '', total: '' });
+  };
+  const handleCopyAll = () => copyToClipboard(history.map(h => h.text).join('\n\n-------------------------\n\n'), onNotify);
+  const handleDownloadAll = () => { downloadHtmlReport(history, 'Relatório Completo SOS'); onNotify("HTML consolidado baixado!"); };
+  useEffect(() => { onReport && onReport(history, getReportText()); });
+
+  return (
+    <div>
+      <Panel accent="var(--cyan)">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="font-display text-base font-semibold">Participação (SOS)</h2>
+            <p className="text-slate-500 text-xs">Share de espaço na categoria</p>
+          </div>
+          <button onClick={() => setShowTargets(!showTargets)} className={`p-2.5 rounded-xl border transition-all shrink-0 ${showTargets ? 'bg-cyan-500 border-cyan-400' : 'bg-white/5 border-white/10 text-slate-400'}`} title="Configurar metas por marca">
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+
+        {importBar}
+
+        {showTargets && (
+          <div className="mb-5 p-4 bg-cyan-500/5 border border-cyan-500/20 rounded-2xl animate-rise">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase text-cyan-400 tracking-widest">Metas por marca (%)</span>
+              <button onClick={clearTargets} className="text-[10px] text-slate-500 hover:text-rose-400 underline decoration-slate-700">Limpar tudo</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {GENERAL_BRANDS.map(b => (
+                <div key={b} className="space-y-1">
+                  <label className="text-[8px] text-slate-500 font-bold uppercase ml-1 truncate block">{b}</label>
+                  <input type="number" inputMode="decimal" placeholder="Meta %" value={targets[b] ?? ''} onChange={e => handleTargetChange(b, e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-lg px-2.5 py-2 text-xs font-mono outline-none focus:border-cyan-500/50" />
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowTargets(false)} className="w-full mt-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-[10px] font-bold uppercase rounded-lg border border-cyan-500/30">Concluir</button>
+          </div>
+        )}
+
+        {definedTargets.length > 0 && !showTargets && (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {definedTargets.map(([k, v]) => (
+              <button key={k} onClick={() => setBrand(k)} className={`px-2 py-1 rounded-md text-[9px] font-bold border transition-all ${brand === k ? 'bg-cyan-500/20 border-cyan-500/50 text-white' : 'bg-black/30 border-white/5 text-slate-400'}`}>
+                {k}: <span className="text-cyan-400">{formatSmart(parseFloat(v) || 0)}%</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <BrandSelect selected={brand} onChange={setBrand} options={GENERAL_BRANDS} />
+        <div className="space-y-3">
+          <SmartInput label={`Espaço ${brand}`} value={inputs.marca} onChange={v => setInputs({ ...inputs, marca: v })} unit={unitLabel} />
+          <SmartInput label="Espaço total mundo" value={inputs.total} onChange={v => setInputs({ ...inputs, total: v })} unit={unitLabel} />
+        </div>
+      </Panel>
+
+      <ResultPanel
+        gaugeValue={result} gaugeTarget={targetShare} gaugeColor={status === 'ABAIXO' ? '#fb7185' : '#22d3ee'} gaugeUnit="%" title="Sua participação" status={status}
+        reportTitle={`Relatório SOS - ${brand}`}
+        description={targetShare != null
+          ? (gapVal > 0 ? `Abaixo da meta de ${formatSmart(targetShare)}%. Faltam ${formatSmart(gapVal)} ${unitLabel} de ${brand}.` : `Meta de ${formatSmart(targetShare)}% atingida ou superada.`)
+          : `Percentual do espaço total da categoria ocupado por ${brand}. Defina uma meta no ícone de ajuste acima.`}
+        getReportText={getReportText} canCopy={inputs.marca && inputs.total}
+        onNotify={onNotify} onSaveToList={handleSaveToList}
+      />
+
+      <SavedList reports={history} moduleName="SOS" onRemove={i => setHistory(history.filter((_, idx) => idx !== i))} onClear={() => setHistory([])} onCopyAll={handleCopyAll} onDownloadAll={handleDownloadAll} />
+    </div>
+  );
+}
+
+/* ============ MÓDULO: MOP ============ */
+function MopModule({ unitMode, onNotify, onStat, onReport }) {
+  const [inputs, setInputs] = useState({ total: '', meta: '' });
+  const [brand, setBrand] = useState(GENERAL_BRANDS[0]);
+  const [history, setHistory] = useState([]);
+  const unitLabel = unitMode === 'cm' ? 'cm' : 'ganchos';
+
+  const rawResult = useMemo(() => {
+    const t = parseFloat(inputs.total) || 0, m = parseFloat(inputs.meta) || 0;
+    return t * (m / 100);
+  }, [inputs]);
+  const metaPct = parseFloat(inputs.meta) || 0;
+
+  useEffect(() => { onStat(inputs.total && inputs.meta ? metaPct : null); }, [metaPct, inputs]);
+
+  const getReportText = () => {
+    if (!inputs.total || !inputs.meta) return null;
+    return `*Planejamento MOP - ${brand}*\n\n📏 *Modo:* ${unitMode.toUpperCase()}\n🌍 *Total Categoria:* ${inputs.total} ${unitLabel}\n🎯 *Objetivo:* ${inputs.meta}%\n🛠️ *Necessário para ${brand}:* ${formatSmart(rawResult)} ${unitLabel}\n\n${getTimestamp()}`;
+  };
+  const handleSaveToList = () => {
+    const text = getReportText(); if (!text) return;
+    setHistory([...history, { id: Date.now(), title: `MOP - ${brand} (Necessário: ${formatSmart(rawResult)} ${unitLabel})`, text }]);
+    onNotify("Adicionado à lista de relatórios!");
+    setInputs({ total: '', meta: '' });
+  };
+  const handleCopyAll = () => copyToClipboard(history.map(h => h.text).join('\n\n-------------------------\n\n'), onNotify);
+  const handleDownloadAll = () => { downloadHtmlReport(history, 'Relatório Completo MOP'); onNotify("HTML consolidado baixado!"); };
+  useEffect(() => { onReport && onReport(history, getReportText()); });
+
+  return (
+    <div>
+      <Panel accent="var(--indigo)">
+        <div className="mb-4">
+          <h2 className="font-display text-base font-semibold">MOP</h2>
+          <p className="text-slate-500 text-xs">Planejamento de objetivo em {unitMode === 'cm' ? 'centímetros' : 'ganchos'}</p>
+        </div>
+        <BrandSelect selected={brand} onChange={setBrand} options={GENERAL_BRANDS} />
+        <div className="space-y-3">
+          <SmartInput label="Espaço total mundo" value={inputs.total} onChange={v => setInputs({ ...inputs, total: v })} unit={unitLabel} />
+          <SmartInput label={`% objetivo ${brand}`} value={inputs.meta} onChange={v => setInputs({ ...inputs, meta: v })} unit="%" />
+        </div>
+      </Panel>
+
+      <ResultPanel
+        gaugeValue={metaPct} gaugeColor="#8b8cf8" gaugeUnit="%" title="Quantidade necessária"
+        reportTitle={`Planejamento MOP - ${brand}`}
+        description={`${formatSmart(rawResult)} ${unitLabel} necessários para ${brand} atingir o objetivo de share.`}
+        getReportText={getReportText} canCopy={inputs.total && inputs.meta}
+        onNotify={onNotify} onSaveToList={handleSaveToList}
+      />
+
+      <SavedList reports={history} moduleName="MOP" onRemove={i => setHistory(history.filter((_, idx) => idx !== i))} onClear={() => setHistory([])} onCopyAll={handleCopyAll} onDownloadAll={handleDownloadAll} />
+    </div>
+  );
+}
+
+/* ============ MÓDULO: KBDS ============ */
+function KbdsModule({ unitMode, onNotify, setUnitMode, onStat, onReport }) {
+  const [allTargets, setAllTargets] = useState(KBDS_TARGETS);
+  const [selectedKbdId, setSelectedKbdId] = useState(allTargets[0].id);
+  const [inputs, setInputs] = useState({ cat: '', brandVal: '', manualTarget: '' });
+  const [channelCC, setChannelCC] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  const selectedKbd = useMemo(() => allTargets.find(k => k.id === selectedKbdId) || allTargets[0], [selectedKbdId, allTargets]);
+
+  const handleKbdChange = (e) => {
+    const kbdId = e.target.value;
+    setSelectedKbdId(kbdId);
+    const kbd = allTargets.find(k => k.id === kbdId);
+    if (kbd && kbd.unit !== 'manual' && kbd.unit !== unitMode) setUnitMode(kbd.unit);
+    setChannelCC(false);
+  };
+  const updateCurrentTarget = (field, value) => setAllTargets(prev => prev.map(t => t.id === selectedKbdId ? { ...t, [field]: value } : t));
+  const addNewKbd = () => {
+    const newId = `kbd_${Date.now()}`;
+    setAllTargets([...allTargets, { id: newId, brand: "Nova Marca", category: "Nova Categoria", target: 0, unit: unitMode === 'manual' ? 'cm' : unitMode }]);
+    setSelectedKbdId(newId); setIsEditing(true);
+    onNotify("Novo KBD adicionado!");
+  };
+  const removeKbd = () => {
+    if (allTargets.length <= 1) { onNotify("Não é possível remover a última meta."); return; }
+    const idx = allTargets.findIndex(t => t.id === selectedKbdId);
+    const newTargets = allTargets.filter(t => t.id !== selectedKbdId);
+    setAllTargets(newTargets);
+    setSelectedKbdId(newTargets[Math.max(0, idx - 1)].id);
+    setIsEditing(false);
+    onNotify("Meta removida com sucesso!");
+  };
+
+  const targetVal = useMemo(() => {
+    if (selectedKbd.id === 'custom') return parseFloat(inputs.manualTarget) || 0;
+    if (selectedKbd.id === 'gillette_masc' && channelCC) return 25;
+    return parseFloat(selectedKbd.target) || 0;
+  }, [selectedKbd, channelCC, inputs.manualTarget]);
+
+  const actualShare = useMemo(() => {
+    const c = parseFloat(inputs.cat) || 0, b = parseFloat(inputs.brandVal) || 0;
+    return c > 0 ? (b / c) * 100 : 0;
+  }, [inputs]);
+
+  const gapVal = useMemo(() => {
+    const c = parseFloat(inputs.cat) || 0;
+    const necessary = c * (targetVal / 100);
+    const actual = parseFloat(inputs.brandVal) || 0;
+    return Math.max(0, necessary - actual);
+  }, [inputs, targetVal]);
+
+  const status = useMemo(() => (!inputs.cat || !inputs.brandVal) ? null : (actualShare >= targetVal ? 'OK' : 'ABAIXO'), [actualShare, targetVal, inputs]);
+  const unitLabel = unitMode === 'cm' ? 'cm' : 'ganchos';
+
+  useEffect(() => { onStat(inputs.cat && inputs.brandVal ? actualShare : null); }, [actualShare, inputs]);
+
+  const getReportText = () => {
+    if (!inputs.cat || !inputs.brandVal) return null;
+    const channelText = channelCC ? 'C&C' : 'Varejo';
+    return `*Relatório KBDS 2026 - ${selectedKbd.brand}*\n\n🏢 *Canal:* ${channelText}\n📋 *Categoria:* ${selectedKbd.category}\n📏 *Modo:* ${unitMode.toUpperCase()}\n🌍 *Total ${selectedKbd.brand}:* ${inputs.cat} ${unitLabel}\n📍 *Espaço ${selectedKbd.category}:* ${inputs.brandVal} ${unitLabel}\n🎯 *Objetivo:* ${formatSmart(targetVal)}%\n📊 *Share Atual:* ${formatSmart(actualShare)}%\n🚨 *Status:* ${status}\n${gapVal > 0 ? `🛠️ *Faltam:* ${formatSmart(gapVal)} ${unitLabel}` : '✅ *Meta Batida!*'}\n\n${getTimestamp()}`;
+  };
+  const handleSaveToList = () => {
+    const text = getReportText(); if (!text) return;
+    setHistory([...history, { id: Date.now(), title: `KBDS - ${selectedKbd.brand} - ${selectedKbd.category} (${formatSmart(actualShare)}%)`, text }]);
+    onNotify("Adicionado à lista de relatórios!");
+    setInputs({ cat: '', brandVal: '', manualTarget: '' });
+  };
+  const handleCopyAll = () => copyToClipboard(history.map(h => h.text).join('\n\n-------------------------\n\n'), onNotify);
+  const handleDownloadAll = () => { downloadHtmlReport(history, 'Relatório Completo KBDS'); onNotify("HTML consolidado baixado!"); };
+  useEffect(() => { onReport && onReport(history, getReportText()); });
+
+  return (
+    <div>
+      <Panel accent="var(--emerald)">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="font-display text-base font-semibold">Cálculo de KBDS</h2>
+            <p className="text-slate-500 text-[11px]">Compare sua execução com a meta oficial 2026</p>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] text-slate-500 font-bold uppercase mb-1">Objetivo</span>
+            <div className="font-mono text-xl font-black text-emerald-400 tabular-nums animate-pop" key={targetVal}>{formatSmart(targetVal)}%</div>
+            {selectedKbd.id === 'gillette_masc' && (
+              <button onClick={() => setChannelCC(!channelCC)} className={`mt-2 px-2 py-1 rounded-md text-[8px] font-black uppercase flex items-center gap-1 border transition-all ${channelCC ? 'bg-orange-600/90 border-orange-500' : 'bg-black/40 text-slate-500 border-white/5'}`}>
+                <Store className="w-2.5 h-2.5" /> C&C {channelCC ? 'ATIVO' : ''}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-4 flex gap-2">
+          <div className="flex-grow relative">
+            <label className="text-[9px] text-slate-500 font-bold uppercase block mb-1">Selecione o KBD</label>
+            <select value={selectedKbdId} onChange={handleKbdChange} className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-xs font-medium outline-none focus:border-cyan-500">
+              {allTargets.map(k => <option key={k.id} value={k.id}>{k.brand} - {k.category}</option>)}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button onClick={() => setIsEditing(!isEditing)} className={`p-3 rounded-xl border transition-all ${isEditing ? 'bg-cyan-500 border-cyan-400' : 'bg-white/5 border-white/10 text-slate-400'}`} title="Configurar metas">
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {isEditing && (
+          <div className="mb-5 p-4 bg-cyan-500/5 border border-cyan-500/20 rounded-2xl space-y-3 animate-rise">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase text-cyan-400 tracking-widest">Painel de ajuste</span>
+              <div className="flex gap-2">
+                <button onClick={removeKbd} className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg text-rose-400 border border-rose-500/20"><Trash className="w-3.5 h-3.5" /></button>
+                <button onClick={addNewKbd} className="flex items-center gap-1 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-[9px] font-bold uppercase border border-white/10"><Plus className="w-3 h-3 text-emerald-400" /> Novo</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[9px] text-slate-500 font-bold uppercase ml-1">Marca</label>
+                <input type="text" value={selectedKbd.brand} onChange={e => updateCurrentTarget('brand', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs outline-none focus:border-cyan-500/50" />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-500 font-bold uppercase ml-1">Categoria</label>
+                <input type="text" value={selectedKbd.category} onChange={e => updateCurrentTarget('category', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs outline-none focus:border-cyan-500/50" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500 font-bold uppercase ml-1">Meta (%)</label>
+              <input type="number" value={selectedKbd.target} onChange={e => updateCurrentTarget('target', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs outline-none focus:border-cyan-500/50" />
+            </div>
+            <button onClick={() => { setIsEditing(false); onNotify("Configurações salvas!"); }} className="w-full py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-[10px] font-bold uppercase rounded-lg border border-cyan-500/30">Concluir</button>
+          </div>
+        )}
+
+        {selectedKbd.id === 'custom' && (
+          <div className="mb-4"><SmartInput label="Meta personalizada (%)" value={inputs.manualTarget} onChange={v => setInputs({ ...inputs, manualTarget: v })} unit="%" /></div>
+        )}
+
+        <div className="space-y-3">
+          <SmartInput label={`Total ${selectedKbd.brand}`} value={inputs.cat} onChange={v => setInputs({ ...inputs, cat: v })} unit={unitLabel} />
+          <SmartInput label={`Espaço ${selectedKbd.category}`} value={inputs.brandVal} onChange={v => setInputs({ ...inputs, brandVal: v })} unit={unitLabel} />
+        </div>
+
+        {inputs.cat && inputs.brandVal && (
+          <div className={`mt-4 p-3.5 rounded-xl border flex items-start gap-2 text-[10px] leading-tight animate-pop ${status === 'OK' ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-rose-500/10 border-rose-500/25 text-rose-300'}`}>
+            <Alert className="w-3 h-3 shrink-0 mt-0.5" />
+            <p>Não arredondamos o resultado. Verifique a execução antes de prosseguir.</p>
+          </div>
+        )}
+      </Panel>
+
+      <ResultPanel
+        gaugeValue={actualShare} gaugeTarget={targetVal} gaugeColor={status === 'ABAIXO' ? '#fb7185' : '#34d399'} gaugeUnit="%"
+        title="Execução KBDS" status={status} reportTitle={`Relatório KBDS 2026 - ${selectedKbd.brand}`}
+        description={gapVal > 0 ? `Abaixo do objetivo de ${formatSmart(targetVal)}%. Adicione mais ${formatSmart(gapVal)} ${unitLabel} da marca.` : `Excelente! Você atingiu ou superou o objetivo oficial de ${formatSmart(targetVal)}%.`}
+        getReportText={getReportText} canCopy={inputs.cat && inputs.brandVal}
+        onNotify={onNotify} onSaveToList={handleSaveToList}
+      />
+
+      <SavedList reports={history} moduleName="KBDS" onRemove={i => setHistory(history.filter((_, idx) => idx !== i))} onClear={() => setHistory([])} onCopyAll={handleCopyAll} onDownloadAll={handleDownloadAll} />
+    </div>
+  );
+}
+
+/* ============ APP PRINCIPAL ============ */
+function App() {
+  const [activeTab, setActiveTab] = useState('cko');
+  const [unitMode, setUnitMode] = useState('cm');
+  const [notification, setNotification] = useState(null);
+  const [now, setNow] = useState(new Date());
+  const [stats, setStats] = useState({ cko: null, sos: null, mop: null, kbds: null });
+  const [brandTargets, setBrandTargets] = useState({});
+  const [mops, setMops] = useState([]);
+  const [activeMop, setActiveMop] = useState(null);
+  const [importing, setImporting] = useState(null);
+  const [ckoSetup, setCkoSetup] = useState({ brands: [], target: null, stamp: 0 });
+  const [storeName, setStoreName] = useState('');
+  const [reports, setReports] = useState({});
+  const [showReport, setShowReport] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showIosHint, setShowIosHint] = useState(false);
+  const [installDismissed, setInstallDismissed] = useState(false);
+
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 1000 * 30); return () => clearInterval(id); }, []);
+  const showNotification = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isIOS && !isStandalone) setShowIosHint(true);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+  };
+  const setStat = (key) => (val) => setStats(s => (s[key] === val ? s : { ...s, [key]: val }));
+  const setReport = (key) => (history, current) => setReports(r => {
+    const nx = { history, current };
+    return JSON.stringify(r[key]) === JSON.stringify(nx) ? r : { ...r, [key]: nx };
+  });
+
+  // mantém as metas de Gôndola do MOP ativo sincronizadas com edições manuais
+  useEffect(() => {
+    if (!activeMop) return;
+    setMops(prev => prev.map(m => (m.id === activeMop && JSON.stringify(m.targets) !== JSON.stringify(brandTargets)) ? { ...m, targets: brandTargets } : m));
+  }, [brandTargets, activeMop]);
+
+  const applyMop = (m) => {
+    setActiveMop(m.id);
+    if (m.targets && Object.keys(m.targets).length) setBrandTargets(m.targets);
+    if (m.cko) setCkoSetup({ brands: m.cko.brands || [], target: m.cko.target, stamp: Date.now() });
+    if (m.fromOcr) setStoreName(m.name);
+  };
+  const handleMopFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) { showNotification("Selecione a imagem (print) do MOP"); return; }
+    setImporting({ msg: 'Carregando leitor de imagem...' });
+    let worker = null;
+    try {
+      const T = await loadTesseract();
+      worker = await T.createWorker('eng');
+      const added = [];
+      for (let i = 0; i < files.length; i++) {
+        setImporting({ msg: `Lendo MOP ${i + 1} de ${files.length}...` });
+        const res = await readMopImage(worker, files[i]);
+        added.push({ id: Date.now() + i, name: res.name, fromOcr: res.fromOcr, cko: res.cko,
+          targets: Object.fromEntries(Object.entries(res.targets).map(([k, v]) => [k, String(v)])) });
+      }
+      const valid = added.filter(m => Object.keys(m.targets).length > 0 || (m.cko && (m.cko.brands.length || m.cko.target != null)));
+      if (!valid.length) showNotification("Não encontrei Gôndola nem Checkout HB nessa imagem");
+      else {
+        setMops(prev => [...prev, ...valid]);
+        const last = valid[valid.length - 1];
+        applyMop(last);
+        const g = Object.keys(last.targets).length;
+        const ck = last.cko && (last.cko.brands.length || last.cko.target != null) ? ` · Checkout HB: ${last.cko.brands.length} itens${last.cko.target != null ? `, meta ${formatSmart(last.cko.target)}%` : ''}` : '';
+        showNotification(`MOP carregado: ${g} metas de Gôndola${ck}`);
+      }
+    } catch (e) {
+      console.error(e); showNotification("Erro ao ler o MOP: " + (e.message || 'tente novamente'));
+    } finally {
+      if (worker) { try { await worker.terminate(); } catch (e) {} }
+      setImporting(null);
+    }
+  };
+  const selectMop = (m) => { applyMop(m); showNotification(`MOP: ${m.name}`); };
+  const removeMop = (id) => {
+    setMops(ms => ms.filter(m => m.id !== id));
+    if (activeMop === id) { setActiveMop(null); setBrandTargets({}); setCkoSetup({ brands: [], target: null, stamp: Date.now() }); }
+  };
+  const importBar = <MopImportBar mops={mops} activeMop={activeMop} importing={importing} onFiles={handleMopFiles} onSelect={selectMop} onRemove={removeMop} />;
+  const activeMopObj = mops.find(m => m.id === activeMop) || null;
+
+  const tabs = [
+    { id: 'cko', label: 'CKO', icon: CreditCard, color: '#fb7185' },
+    { id: 'sos', label: 'SOS', icon: Gauge, color: '#22d3ee' },
+    { id: 'mop', label: 'MOP', icon: Target, color: '#8b8cf8' },
+    { id: 'kbds', label: 'KBDS', icon: ShoppingBag, color: '#34d399' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-grid relative flex flex-col">
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-[-15%] right-[-10%] w-[420px] h-[420px] bg-cyan-600/10 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-15%] left-[-10%] w-[420px] h-[420px] bg-emerald-600/[.06] rounded-full blur-[100px]" />
+      </div>
+
+      <header className="relative z-10 px-5 pt-7 pb-4 flex items-start justify-between">
+        <div className="animate-rise">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-7 h-7 rounded-md bg-[#0f172a] border border-cyan-500/40 flex items-center justify-center">
+              <Ruler className="w-4 h-4 text-cyan-400" />
+            </div>
+            <h1 className="font-display text-lg font-bold tracking-tight">TRADEPRO</h1>
+          </div>
+          <p className="text-slate-500 text-[10px] font-semibold uppercase tracking-[0.15em]">Painel de Desempenho Avançado</p>
+        </div>
+        <div className="text-right animate-rise">
+          <div className="flex items-center justify-end gap-1 text-slate-500"><Clock className="w-3 h-3" /><span className="font-mono text-[10px]">{now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span></div>
+          <span className="font-mono text-[10px] text-slate-600">{now.toLocaleDateString('pt-BR')}</span>
+        </div>
+      </header>
+
+      {!installDismissed && (deferredPrompt || showIosHint) && (
+        <div className="relative z-10 px-5 mb-4 animate-rise">
+          <div className="bg-cyan-500/10 border border-cyan-500/25 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#0f172a] border border-cyan-500/40 flex items-center justify-center shrink-0">
+              <Ruler className="w-4 h-4 text-cyan-400" />
+            </div>
+            <div className="flex-grow min-w-0">
+              <p className="text-xs font-semibold text-white">Instale o TradePro no seu celular</p>
+              <p className="text-[10px] text-slate-400 leading-snug">
+                {deferredPrompt ? 'Acesse como um app, direto da tela inicial, mesmo offline.' : 'Toque em Compartilhar e depois em "Adicionar à Tela de Início".'}
+              </p>
+            </div>
+            {deferredPrompt ? (
+              <button onClick={handleInstallClick} className="shrink-0 px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#080b12] text-[11px] font-bold uppercase transition-all">Instalar</button>
+            ) : (
+              <button onClick={() => setInstallDismissed(true)} className="shrink-0 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold uppercase transition-all">Entendi</button>
+            )}
+            <button onClick={() => setInstallDismissed(true)} className="shrink-0 text-slate-500 hover:text-white p-1" aria-label="Fechar">✕</button>
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 px-5 mb-5 grid grid-cols-4 gap-2 animate-rise">
+        {tabs.map(t => (
+          <div key={t.id} className="bg-white/[.03] border border-white/10 rounded-xl px-2 py-2.5 flex flex-col items-center gap-1">
+            <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500">{t.label}</span>
+            <span className="font-mono text-sm font-bold tabular-nums" style={{ color: stats[t.id] != null ? t.color : '#475569' }}>
+              {stats[t.id] != null ? `${formatSmart(stats[t.id])}%` : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {activeTab !== 'cko' && (
+        <div className="relative z-10 px-5 mb-4 flex justify-center animate-rise">
+          <div className="bg-white/[.03] p-1 rounded-xl border border-white/10 flex gap-1 w-full max-w-xs">
+            <button onClick={() => setUnitMode('cm')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all ${unitMode === 'cm' ? 'bg-cyan-500 shadow-lg shadow-cyan-500/25' : 'text-slate-500 hover:bg-white/5'}`}>
+              <Ruler className="w-3 h-3" /> Centímetros
+            </button>
+            <button onClick={() => setUnitMode('ganchos')} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-all ${unitMode === 'ganchos' ? 'bg-indigo-500 shadow-lg shadow-indigo-500/25' : 'text-slate-500 hover:bg-white/5'}`}>
+              <div className="rotate-90"><Share2 className="w-3 h-3" /></div> Ganchos
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 px-5 mb-5">
+        <nav className="flex p-1 bg-white/[.03] border border-white/10 rounded-2xl">
+          {tabs.map(t => <NavButton key={t.id} id={t.id} active={activeTab} onClick={setActiveTab} label={t.label} icon={t.icon} />)}
+        </nav>
+      </div>
+
+      <div className="relative z-10 px-5 mb-5">
+        <div className="flex gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Store className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="Nome da loja"
+              className="w-full bg-white/[.03] border border-white/10 rounded-xl pl-9 pr-3 py-3 text-sm outline-none focus:border-cyan-500/50 truncate" />
+          </div>
+          <button onClick={() => setShowReport(true)} className="shrink-0 px-4 rounded-xl flex items-center gap-2 font-bold text-xs bg-indigo-500 hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20">
+            <Clipboard className="w-4 h-4" /> Relatório único
+          </button>
+        </div>
+      </div>
+
+      <main className="relative z-10 px-5 pb-24 flex-grow">
+        <div className={activeTab === 'cko' ? 'block animate-rise' : 'hidden'}><CkoModule onNotify={showNotification} onStat={setStat('cko')} ckoSetup={ckoSetup} importBar={importBar} onReport={setReport('cko')} /></div>
+        <div className={activeTab === 'sos' ? 'block animate-rise' : 'hidden'}><SosModule unitMode={unitMode} onNotify={showNotification} onStat={setStat('sos')} targets={brandTargets} setTargets={setBrandTargets} importBar={importBar} onReport={setReport('sos')} /></div>
+        <div className={activeTab === 'mop' ? 'block animate-rise' : 'hidden'}><MopModule unitMode={unitMode} onNotify={showNotification} onStat={setStat('mop')} onReport={setReport('mop')} /></div>
+        <div className={activeTab === 'kbds' ? 'block animate-rise' : 'hidden'}><KbdsModule unitMode={unitMode} onNotify={showNotification} setUnitMode={setUnitMode} onStat={setStat('kbds')} onReport={setReport('kbds')} /></div>
+      </main>
+
+      <footer className="relative z-10 text-center pb-6 -mt-16">
+        <p className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">TradePro Performance • Painel Avançado</p>
+      </footer>
+
+      <ReportModal open={showReport} onClose={() => setShowReport(false)} storeName={storeName} setStoreName={setStoreName} reports={reports} mop={activeMopObj} targets={brandTargets} onNotify={showNotification} />
+
+      {notification && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-max animate-pop">
+          <div className="bg-emerald-500/95 backdrop-blur-md px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-medium border border-emerald-400/50">
+            <Check className="w-4 h-4" />{notification}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW falhou:', err));
+    });
+  }
+</script>
+</body>
+</html>
