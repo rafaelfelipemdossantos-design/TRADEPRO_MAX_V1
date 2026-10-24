@@ -278,6 +278,33 @@ const readMopImage = async (worker, file) => {
   if (crect) {
     const r3 = await worker.recognize(canvas, { rectangle: crect });
     cko = mopParseCheckout(r3.data.text.split('\n'));
+
+    // Fallback seguro: só relê a meta se a leitura original não encontrou percentual.
+    if (cko.target == null) {
+      const checkoutBottom = crect.top + crect.height;
+      const retryTop = Math.min(checkoutBottom - 1, crect.top + Math.round(crect.height * 0.55));
+      const targetRect = {
+        left: crect.left,
+        top: retryTop,
+        width: crect.width,
+        height: Math.max(1, checkoutBottom - retryTop)
+      };
+
+      await worker.setParameters({ tessedit_pageseg_mode: '7' });
+      let retryLines = [];
+      try {
+        const retry = await worker.recognize(canvas, { rectangle: targetRect });
+        retryLines = retry.data.text.split('\n');
+      } finally {
+        // Restaura o modo já utilizado pelo restante da leitura do MOP.
+        await worker.setParameters({ tessedit_pageseg_mode: '6' });
+      }
+
+      const retryTarget = parseCheckoutTargetFromText(retryLines);
+      if (retryTarget != null) {
+        cko = { ...cko, target: retryTarget };
+      }
+    }
   }
   const ocrName = mopStoreName(words, canvas.width);
   return { name: ocrName || file.name.replace(/\.[^.]+$/, ''), fromOcr: !!ocrName, targets, cko };
@@ -325,6 +352,16 @@ const mopParseCheckout = lines => {
   const vals = []; const re = /(\d{1,3}(?:[.,]\d+)?)(?:\s*[-–]\s*(\d{1,3}(?:[.,]\d+)?))?\s*%/g; let m;
   while ((m = re.exec(penText))) [m[1], m[2]].forEach(x => { if (x) { const v = parseFloat(x.replace(',', '.')); if (v <= 100) vals.push(v); } });
   return { brands: CKO_BRANDS.filter(b => found.includes(b)), target: vals.length ? Math.max(...vals) : null };
+};
+
+// Fallback conservador: aceita apenas percentual associado ao rótulo do objetivo.
+const parseCheckoutTargetFromText = lines => {
+  const text = mopNorm(lines.join(' ')).replace(/\s+/g, ' ');
+  const match = text.match(/\b(?:obj(?:etivo)?|penetracao)\b[^0-9]{0,24}(\d{1,3}(?:[.,]\d+)?)\s*%/i);
+  if (!match) return null;
+
+  const value = parseFloat(match[1].replace(',', '.'));
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
 };
 
 /* ============ RELATÓRIO ÚNICO ============ */

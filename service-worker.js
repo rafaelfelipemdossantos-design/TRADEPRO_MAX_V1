@@ -1,7 +1,7 @@
 /* TradePro Performance — Service Worker
    Guarda o app no aparelho para abrir rápido e funcionar offline.
    Ao publicar uma nova versão, aumente o número em CACHE_VERSION. */
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE = `tradepro-${CACHE_VERSION}`;
 
 const SHELL = [
